@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AVL Tree Visualizer</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <div class="logo">T</div>
+  <h1>AVL Tree Visualizer <span>self-balancing BST</span></h1>
+</header>
+
+<div class="main-wrap">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Sisipkan / Hapus Node</div>
+      <div class="input-row">
+        <input type="number" id="val-input" placeholder="Masukkan nilai..." min="-999" max="9999">
+        <button class="btn btn-primary" onclick="doInsert()">+</button>
+      </div>
+      <div class="input-row">
+        <button class="btn btn-danger btn-full" onclick="doDelete()">Hapus nilai di atas</button>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Aksi Cepat</div>
+      <div class="quick-btns">
+        <button class="btn btn-ghost" onclick="doRandom(5)">Acak 5 node</button>
+        <button class="btn btn-ghost" onclick="doRandom(10)">Acak 10 node</button>
+        <button class="btn btn-ghost" onclick="doPreset('bst')">Contoh BST</button>
+        <button class="btn btn-ghost" onclick="doPreset('zigzag')">Zigzag case</button>
+      </div>
+      <button class="btn btn-ghost btn-full" onclick="doClear()">⟳ Reset pohon</button>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Statistik</div>
+      <div class="stats">
+        <div class="stat-card">
+          <div class="stat-val" id="stat-n">0</div>
+          <div class="stat-lbl">Node</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="stat-h">0</div>
+          <div class="stat-lbl">Tinggi</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="stat-r">0</div>
+          <div class="stat-lbl">Rotasi</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Keterangan Warna</div>
+      <div class="legend">
+        <div class="legend-row">
+          <div class="legend-dot" style="background:#3ecf8e"></div>
+          BF = 0 — sempurna seimbang
+        </div>
+        <div class="legend-row">
+          <div class="legend-dot" style="background:#5b8dee"></div>
+          BF = ±1 — masih valid
+        </div>
+        <div class="legend-row">
+          <div class="legend-dot" style="background:#f0a843"></div>
+          BF = ±2 — memicu rotasi
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-section" style="flex:1">
+      <div class="log-wrap">
+        <div class="log-head">
+          <span>Log operasi</span>
+          <button id="log-clear" onclick="clearLog()">bersihkan</button>
+        </div>
+        <div id="log-body"></div>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- Canvas -->
+  <div class="canvas-wrap">
+    <div class="canvas-toolbar">
+      <span>Klik node untuk melihat detail</span>
+      <button class="zoom-btn" onclick="zoom(-0.15)" title="Perkecil">−</button>
+      <button class="zoom-btn" onclick="zoom(0.15)" title="Perbesar">+</button>
+      <button class="zoom-btn" onclick="resetZoom()" title="Reset zoom" style="font-size:12px">⊡</button>
+    </div>
+    <div id="tree-scroll">
+      <div class="empty-state" id="empty-state">
+        <div class="empty-icon">🌳</div>
+        <p>Pohon masih kosong — sisipkan nilai di panel kiri</p>
+      </div>
+      <svg id="tree-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+    </div>
+  </div>
+
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
