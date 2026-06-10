@@ -41,6 +41,27 @@
     </div>
 
     <div class="sidebar-section">
+      <div class="sidebar-label">Pencarian & Traversal</div>
+      <div class="input-row">
+        <input type="number" id="search-input" placeholder="Cari nilai...">
+        <button class="btn btn-primary" onclick="doSearch()">Cari</button>
+      </div>
+      <div class="quick-btns">
+        <button class="btn btn-ghost" onclick="doTraverse('in')">In-order</button>
+        <button class="btn btn-ghost" onclick="doTraverse('pre')">Pre-order</button>
+        <button class="btn btn-ghost" onclick="doTraverse('post')">Post-order</button>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Data</div>
+      <div class="quick-btns">
+        <button class="btn btn-ghost" onclick="doExport()">Export JSON</button>
+        <button class="btn btn-ghost" onclick="doImport()">Import JSON</button>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
       <div class="sidebar-label">Statistik</div>
       <div class="stats">
         <div class="stat-card">
@@ -101,7 +122,10 @@
         <div class="empty-icon">🌳</div>
         <p>Pohon masih kosong — sisipkan nilai di panel kiri</p>
       </div>
-      <svg id="tree-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+      <svg id="tree-svg" xmlns="http://www.w3.org/2000/svg">
+        <g id="edges-grp"></g>
+        <g id="nodes-grp"></g>
+      </svg>
     </div>
   </div>
 

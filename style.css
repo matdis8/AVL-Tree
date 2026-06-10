@@ -53,7 +53,7 @@ header span {
 /* ── Layout ── */
 .main-wrap {
   display: grid;
-  grid-template-columns: 300px 1fr;
+  grid-template-columns: 320px 1fr;
   flex: 1;
   overflow: hidden;
 }
@@ -84,9 +84,19 @@ header span {
   padding: 9px 12px;
   outline: none;
   transition: border-color 0.2s;
+  min-width: 0; /* Fix flex overflow */
 }
 .input-row input:focus { border-color: var(--accent); }
 .input-row input::placeholder { color: var(--text3); }
+
+/* Animation for invalid input */
+.shake { animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; border-color: var(--red) !important; }
+@keyframes shake {
+  10%, 90% { transform: translate3d(-1px, 0, 0); }
+  20%, 80% { transform: translate3d(2px, 0, 0); }
+  30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+  40%, 60% { transform: translate3d(4px, 0, 0); }
+}
 
 .btn {
   padding: 9px 16px;
@@ -104,6 +114,7 @@ header span {
 .btn-full { width: 100%; text-align: center; padding: 8px; }
 
 .quick-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.quick-btns > button { padding: 7px 10px; font-size: 12px; }
 
 /* ── Legend ── */
 .legend { display: flex; flex-direction: column; gap: 7px; }
@@ -116,6 +127,7 @@ header span {
   border: 1px solid var(--border);
   border-radius: var(--r);
   overflow: hidden;
+  display: flex; flex-direction: column;
 }
 .log-head {
   display: flex; align-items: center; justify-content: space-between;
@@ -131,7 +143,7 @@ header span {
   font-family: var(--mono);
   font-size: 12px; line-height: 1.7;
   color: var(--text2);
-  max-height: 180px;
+  max-height: 200px;
   overflow-y: auto;
 }
 .log-entry { padding: 1px 0; }
@@ -139,6 +151,7 @@ header span {
 .log-entry.rot  { color: var(--amber); }
 .log-entry.del  { color: var(--red); }
 .log-entry.err  { color: var(--red); opacity: 0.7; }
+.log-entry.highlight { color: var(--accent2); font-weight: bold; }
 
 /* ── Stats strip ── */
 .stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
@@ -182,23 +195,49 @@ header span {
 #tree-svg {
   display: block;
   transition: transform 0.2s;
+  min-width: 100%; min-height: 100%;
 }
 
 .empty-state {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   height: 100%; gap: 12px; color: var(--text3);
   pointer-events: none;
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
 }
 .empty-icon { font-size: 48px; opacity: 0.4; }
 .empty-state p { font-size: 14px; }
 
-/* ── SVG Nodes ── */
-.node-g { cursor: pointer; }
+/* ── SVG Nodes (Animated) ── */
+.node-g {
+  cursor: pointer;
+  /* Smooth CSS transition for moving nodes */
+  transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
 .node-g:hover circle.node-circle { filter: brightness(1.2); }
-.node-circle { transition: fill 0.3s, r 0.3s; }
+.node-circle { transition: fill 0.3s, r 0.3s, filter 0.3s; }
 .node-text { font-family: 'Segoe UI', system-ui, sans-serif; pointer-events: none; }
 .bf-text { font-family: var(--mono); pointer-events: none; }
-.edge-line { stroke: #2a3050; stroke-width: 1.5; fill: none; }
+
+.edge-line { 
+  stroke: var(--border); 
+  stroke-width: 1.5; 
+  fill: none; 
+  /* Smooth transitions for edge recalculations */
+  transition: x1 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), 
+              y1 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+              x2 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), 
+              y2 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Traversal & Search Highlights */
+.node-g.visiting .node-circle { 
+  fill: var(--amber) !important; 
+  filter: drop-shadow(0 0 10px var(--amber)); 
+}
+.node-g.found .node-circle { 
+  fill: var(--accent2) !important; 
+  filter: drop-shadow(0 0 12px var(--accent2)); 
+}
 
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -206,7 +245,7 @@ header span {
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
 /* ── Responsive ── */
-@media (max-width: 680px) {
+@media (max-width: 768px) {
   .main-wrap { grid-template-columns: 1fr; }
-  .sidebar { border-right: none; border-bottom: 1px solid var(--border); }
+  .sidebar { border-right: none; border-bottom: 1px solid var(--border); max-height: 50vh; }
 }
