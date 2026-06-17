@@ -231,13 +231,23 @@ header span {
 
 /* Traversal & Search Highlights */
 .node-g.visiting .node-circle { 
-  fill: var(--amber) !important; 
-  filter: drop-shadow(0 0 10px var(--amber)); 
+  fill: var(--accent) !important; 
+  filter: drop-shadow(0 0 10px var(--accent)); 
 }
 .node-g.found .node-circle { 
-  fill: var(--accent2) !important; 
-  filter: drop-shadow(0 0 12px var(--accent2)); 
+  fill: var(--green) !important; 
+  filter: drop-shadow(0 0 12px var(--green)); 
 }
+.node-g.unbalanced-node .node-circle {
+  fill: var(--red) !important;
+  animation: pulse-red 0.8s infinite alternate;
+}
+@keyframes pulse-red {
+  from { filter: drop-shadow(0 0 2px var(--red)); }
+  to { filter: drop-shadow(0 0 15px var(--red)); }
+}
+
+.log-entry.warn { color: var(--amber); font-weight: 500; }
 
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }

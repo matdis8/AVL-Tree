@@ -11,7 +11,8 @@ const svgEl = (tag, attrs) => {
 let state = {
   scale: 1,
   totalRotations: 0,
-  isAnimating: false // To prevent parallel conflicting animations
+  isAnimating: false,
+  animationSpeed: 800 // ms
 };
 
 /* ───────────── AVL Tree Engine ───────────── */
@@ -21,6 +22,7 @@ class Node {
     this.left = null; 
     this.right = null; 
     this.h = 1;
+    this._isUnbalanced = false; // Flag for visualization
   }
 }
 
@@ -38,7 +40,6 @@ class AVLTree {
     x.right = y; y.left = T2;
     this.upH(y); this.upH(x);
     state.totalRotations++;
-    addLog(`Rotasi Kanan pada node ${y.val}`, 'rot');
     return x;
   }
 
@@ -47,55 +48,95 @@ class AVLTree {
     y.left = x; x.right = T2;
     this.upH(x); this.upH(y);
     state.totalRotations++;
-    addLog(`Rotasi Kiri pada node ${x.val}`, 'rot');
     return y;
   }
 
-  balance(n) {
+  async balance(n) {
+    if (!n) return null;
     this.upH(n);
     const b = this.bf(n);
+
+    // Visual: Highlight node if unbalanced (BF >= 2 or <= -2)
+    if (Math.abs(b) > 1) {
+      n._isUnbalanced = true;
+      updateUI();
+      addLog(`Ketidakseimbangan pada ${n.val} (BF=${b}). Menyiapkan rotasi...`, 'warn');
+      await sleep(state.animationSpeed);
+    }
+
+    let result = n;
+
+    // Left Heavy
     if (b > 1) { 
       if (this.bf(n.left) < 0) { 
+        addLog(`→ Kasus LR: Rotasi Kiri pada anak ${n.left.val}`, 'rot');
         n.left = this.rotL(n.left); 
-        addLog('  → LR case: rotasi kiri pada anak kiri', 'rot'); 
-      } 
-      return this.rotR(n); 
+        updateUI();
+        await sleep(state.animationSpeed);
+      }
+      addLog(`→ Rotasi Kanan pada node ${n.val}`, 'rot');
+      result = this.rotR(n);
     }
-    if (b < -1) { 
+    // Right Heavy
+    else if (b < -1) { 
       if (this.bf(n.right) > 0) { 
+        addLog(`→ Kasus RL: Rotasi Kanan pada anak ${n.right.val}`, 'rot');
         n.right = this.rotR(n.right); 
-        addLog('  → RL case: rotasi kanan pada anak kanan', 'rot'); 
-      } 
-      return this.rotL(n); 
+        updateUI();
+        await sleep(state.animationSpeed);
+      }
+      addLog(`→ Rotasi Kiri pada node ${n.val}`, 'rot');
+      result = this.rotL(n);
     }
-    return n;
+    
+    // PENTING: Bersihkan flag merah dari node lama (n) dan node baru (result)
+    n._isUnbalanced = false;
+    if (result) result._isUnbalanced = false;
+    
+    if (Math.abs(b) > 1) {
+      updateUI();
+      await sleep(state.animationSpeed / 2);
+    }
+    
+    return result;
   }
 
-  insert(n, v) {
+  async insert(n, v) {
     if (!n) return new Node(v);
-    if (v < n.val) n.left = this.insert(n.left, v);
-    else if (v > n.val) n.right = this.insert(n.right, v);
-    else {
-      // Duplicate found - do nothing
-      addLog(`Nilai ${v} sudah ada dalam pohon. Duplikat diabaikan.`, 'err');
-      return n;
-    }
-    return this.balance(n);
+    
+    // Highlight visiting path
+    n._visiting = true;
+    updateUI();
+    await sleep(state.animationSpeed / 2);
+    n._visiting = false;
+
+    if (v < n.val) n.left = await this.insert(n.left, v);
+    else if (v > n.val) n.right = await this.insert(n.right, v);
+    else return n; // Duplicate (handled in doInsert)
+
+    return await this.balance(n);
   }
 
   minNode(n) { while (n.left) n = n.left; return n; }
 
-  remove(n, v) {
+  async remove(n, v) {
     if (!n) return null;
-    if (v < n.val) n.left = this.remove(n.left, v);
-    else if (v > n.val) n.right = this.remove(n.right, v);
+
+    n._visiting = true;
+    updateUI();
+    await sleep(state.animationSpeed / 2);
+    n._visiting = false;
+
+    if (v < n.val) n.left = await this.remove(n.left, v);
+    else if (v > n.val) n.right = await this.remove(n.right, v);
     else {
       if (!n.left || !n.right) return n.left || n.right;
       const m = this.minNode(n.right);
+      addLog(`Menghapus ${v}, menggantikan dengan nilai terkecil dari subtree kanan (${m.val})`, 'info');
       n.val = m.val; 
-      n.right = this.remove(n.right, m.val);
+      n.right = await this.remove(n.right, m.val);
     }
-    return this.balance(n);
+    return await this.balance(n);
   }
 
   countNodes(n) { return n ? 1 + this.countNodes(n.left) + this.countNodes(n.right) : 0; }
@@ -113,24 +154,36 @@ class AVLTree {
     this.upH(n);
     return n;
   }
+
+  exists(n, v) {
+    if (!n) return false;
+    if (v === n.val) return true;
+    return v < n.val ? this.exists(n.left, v) : this.exists(n.right, v);
+  }
 }
 
 let tree = new AVLTree();
 
-/* ───────────── Rendering Engine (Enter/Update/Exit) ───────────── */
+/* ───────────── Rendering Engine ───────────── */
 const NODE_R   = 22;
 const V_GAP    = 75;
-const H_SPREAD = 320;
 
+// Improved coordinate calculation to prevent overlap while staying compact
 function assignCoords(node, depth, xCenter, xSpread) {
   if (!node) return;
   node._x = xCenter;
   node._y = 60 + depth * V_GAP;
-  assignCoords(node.left,  depth + 1, xCenter - xSpread, xSpread / 2);
-  assignCoords(node.right, depth + 1, xCenter + xSpread, xSpread / 2);
+  
+  // Spread shrinks at each level, but we keep it sufficient for nodes
+  const nextSpread = xSpread * 0.55; 
+  
+  assignCoords(node.left,  depth + 1, xCenter - xSpread, nextSpread);
+  assignCoords(node.right, depth + 1, xCenter + xSpread, nextSpread);
 }
 
-function getColor(b) {
+function getColor(n) {
+  if (n._isUnbalanced) return 'var(--red)';
+  const b = tree.bf(n);
   if (b === 0) return 'var(--green)';
   if (Math.abs(b) === 1) return 'var(--accent)';
   return 'var(--amber)';
@@ -152,11 +205,12 @@ function draw() {
   }
   empty.style.display = 'none';
 
-  // Calculate coordinates
-  const spread = Math.max(H_SPREAD / Math.pow(1.05, tree.hgt(tree.root)), 35);
-  assignCoords(tree.root, 0, 0, spread);
+  // More conservative initial spread based on tree height
+  const h = tree.hgt(tree.root);
+  const initialSpread = Math.min(30 * Math.pow(1.6, h - 1), 500); 
+  assignCoords(tree.root, 0, 0, initialSpread);
 
-  // Bounding box for canvas size
+  // Bounding box calculation
   let minX = Infinity, maxX = -Infinity, maxY = -Infinity;
   function bbox(n) {
     if (!n) return;
@@ -167,15 +221,20 @@ function draw() {
   }
   bbox(tree.root);
 
-  const pad  = 40;
-  const W    = Math.max(maxX - minX + pad * 2, svg.parentElement.clientWidth);
-  const H    = Math.max(maxY + pad * 2, svg.parentElement.clientHeight);
-  const offX = Math.max(-minX + pad, W/2); // Center if tree is small
+  const pad  = 80;
+  const treeWidth = maxX - minX;
+  const containerW = svg.parentElement.clientWidth;
+  
+  const W = Math.max(treeWidth + pad * 2, containerW);
+  const H = maxY + pad;
+  
+  // offX: ensure the leftmost node starts at 'pad' from left, 
+  // or center it if the tree is narrower than the container.
+  const offX = (treeWidth < containerW - pad * 2) ? (containerW / 2 - (minX + maxX) / 2) : (-minX + pad);
 
   svg.setAttribute('width', W);
   svg.setAttribute('height', H);
 
-  // Extract current nodes and edges
   let currentNodes = {};
   let currentEdges = {};
 
@@ -187,77 +246,59 @@ function draw() {
   }
   traverseDrawData(tree.root);
 
-  // 1. Sync Edges (Lines)
+  // Sync Edges
   Array.from(edgesGrp.children).forEach(el => {
-    if (!currentEdges[el.dataset.id]) el.remove(); // Exit
+    if (!currentEdges[el.dataset.id]) el.remove();
   });
   for (const [id, data] of Object.entries(currentEdges)) {
     let el = document.querySelector(`.edge-line[data-id="${id}"]`);
-    if (!el) { // Enter
+    if (!el) {
       el = svgEl('line', { class: 'edge-line', 'data-id': id });
       edgesGrp.appendChild(el);
-      // Start from parent to animate growing
       el.setAttribute('x1', data.p._x + offX);
       el.setAttribute('y1', data.p._y);
       el.setAttribute('x2', data.p._x + offX);
       el.setAttribute('y2', data.p._y);
-      
-      // Force reflow
-      el.getBoundingClientRect();
     }
-    // Update
     el.setAttribute('x1', data.p._x + offX);
     el.setAttribute('y1', data.p._y);
     el.setAttribute('x2', data.c._x + offX);
     el.setAttribute('y2', data.c._y);
   }
 
-  // 2. Sync Nodes (Groups)
+  // Sync Nodes
   Array.from(nodesGrp.children).forEach(el => {
-    if (!currentNodes[el.dataset.val]) el.remove(); // Exit
+    if (!currentNodes[el.dataset.val]) el.remove();
   });
   for (const [val, n] of Object.entries(currentNodes)) {
     let el = document.querySelector(`.node-g[data-val="${val}"]`);
     const b = tree.bf(n);
-    const col = getColor(b);
+    const col = getColor(n);
 
-    if (!el) { // Enter
+    if (!el) {
       el = svgEl('g', { class: 'node-g', 'data-val': val });
-      
-      // Shadow/Glow circle
       el.appendChild(svgEl('circle', { cx: 0, cy: 0, r: NODE_R + 5, fill: col, opacity: '0.12', class: 'node-shadow' }));
-      // Main circle
       el.appendChild(svgEl('circle', { cx: 0, cy: 0, r: NODE_R, fill: col, class: 'node-circle' }));
-      // Highlight
       el.appendChild(svgEl('circle', { cx: 0, cy: -5, r: 8, fill: '#fff', opacity: '0.08' }));
-      
-      // Value Text
       const txt = svgEl('text', {
         x: 0, y: 1, 'text-anchor': 'middle', 'dominant-baseline': 'central',
         'font-size': '13', 'font-weight': '600', fill: '#fff', class: 'node-text'
       });
       el.appendChild(txt);
-
-      // BF Text
       const bftxt = svgEl('text', {
         x: 0, y: -NODE_R - 6, 'text-anchor': 'middle', 'dominant-baseline': 'central',
         'font-size': '10', fill: col, class: 'bf-text', opacity: '0.85'
       });
       el.appendChild(bftxt);
-
       el.addEventListener('click', () => {
-        addLog(`Detail Node: Val=${n.val}, BF=${b}, H=${n.h}`, 'info');
+        const hL = tree.hgt(n.left), hR = tree.hgt(n.right);
+        addLog(`Detail Node ${n.val}: Tinggi Kiri=${hL}, Tinggi Kanan=${hR} → BF = ${hL - hR}`, 'info');
         document.getElementById('val-input').value = n.val;
       });
-
       nodesGrp.appendChild(el);
-      
-      // Start position (from root or top to animate falling in)
       el.setAttribute('transform', `translate(${offX}, 0) scale(0.1)`);
-      el.getBoundingClientRect(); // force reflow
     }
 
-    // Update
     el.setAttribute('transform', `translate(${n._x + offX}, ${n._y}) scale(1)`);
     el.querySelector('.node-circle').setAttribute('fill', col);
     el.querySelector('.node-shadow').setAttribute('fill', col);
@@ -265,50 +306,67 @@ function draw() {
     el.querySelector('.bf-text').textContent = `bf:${b}`;
     el.querySelector('.bf-text').setAttribute('fill', col);
     
-    // Clear traversal classes if any
-    el.classList.remove('visiting', 'found');
+    if (n._visiting) el.classList.add('visiting'); else el.classList.remove('visiting');
+    if (n._isUnbalanced) el.classList.add('unbalanced-node'); else el.classList.remove('unbalanced-node');
   }
 }
 
 /* ───────────── Actions ───────────── */
 function validateInput(inp) {
   const v = parseInt(inp.value);
-  if (isNaN(v) || v < -9999 || v > 9999) { 
-    inp.classList.remove('shake');
-    void inp.offsetWidth; // trigger reflow
+  if (isNaN(v) || v < -999 || v > 9999) { 
     inp.classList.add('shake');
-    addLog('Nilai tidak valid (−9999 hingga 9999)', 'err'); 
+    setTimeout(() => inp.classList.remove('shake'), 400);
+    addLog('Input tidak valid (−999 s/d 9999)', 'err'); 
     return null;
   }
   return v;
 }
 
-function doInsert() {
+async function doInsert() {
   if (state.isAnimating) return;
   const inp = document.getElementById('val-input');
   const v = validateInput(inp);
   if (v === null) return;
 
-  addLog(`Sisipkan ${v}`, 'info');
-  tree.root = tree.insert(tree.root, v);
+  if (tree.exists(tree.root, v)) {
+    addLog(`Nilai ${v} sudah ada dalam pohon. Duplikat diabaikan.`, 'warn');
+    inp.classList.add('shake');
+    setTimeout(() => inp.classList.remove('shake'), 400);
+    return;
+  }
+
+  state.isAnimating = true;
+  addLog(`Menyisipkan ${v}...`, 'info');
+  tree.root = await tree.insert(tree.root, v);
   inp.value = '';
-  inp.classList.remove('shake');
   updateUI();
+  state.isAnimating = false;
+  addLog(`Selesai menyisipkan ${v}.`, 'highlight');
 }
 
-function doDelete() {
+async function doDelete() {
   if (state.isAnimating) return;
   const inp = document.getElementById('val-input');
   const v = parseInt(inp.value);
   if (isNaN(v)) { 
     inp.classList.add('shake');
+    setTimeout(() => inp.classList.remove('shake'), 400);
     addLog('Masukkan nilai yang ingin dihapus', 'err'); return; 
   }
-  addLog(`Hapus ${v}`, 'del');
-  tree.root = tree.remove(tree.root, v);
+  
+  if (!tree.exists(tree.root, v)) {
+    addLog(`Nilai ${v} tidak ditemukan.`, 'err');
+    return;
+  }
+
+  state.isAnimating = true;
+  addLog(`Menghapus ${v}...`, 'del');
+  tree.root = await tree.remove(tree.root, v);
   inp.value = '';
-  inp.classList.remove('shake');
   updateUI();
+  state.isAnimating = false;
+  addLog(`Selesai menghapus ${v}.`, 'highlight');
 }
 
 function doClear() { 
@@ -319,27 +377,54 @@ function doClear() {
   updateUI(); 
 }
 
-function doRandom(n) {
+async function doRandom(n) {
   if (state.isAnimating) return;
-  addLog(`Sisipkan ${n} nilai acak...`, 'info');
-  for (let i = 0; i < n; i++) tree.root = tree.insert(tree.root, Math.floor(Math.random() * 99) + 1);
+  state.isAnimating = true;
+  addLog(`Menyisipkan ${n} nilai acak satu per satu...`, 'info');
+  for (let i = 0; i < n; i++) {
+    const v = Math.floor(Math.random() * 99) + 1;
+    if (!tree.exists(tree.root, v)) {
+      tree.root = await tree.insert(tree.root, v);
+      updateUI();
+      await sleep(200);
+    }
+  }
+  state.isAnimating = false;
   updateUI();
 }
 
-function doPreset(type) {
+async function doPreset(type) {
   if (state.isAnimating) return;
   tree.root = null; state.totalRotations = 0;
+  updateUI();
+
+  state.isAnimating = true;
   if (type === 'bst') {
-    [30, 20, 40, 10, 25, 35, 50].forEach(v => { tree.root = tree.insert(tree.root, v); });
-    addLog('Contoh BST seimbang dimuat.', 'info');
+    const vals = [30, 20, 40, 10, 25, 35, 50];
+    addLog('Memuat contoh BST Seimbang...', 'info');
+    for (const v of vals) {
+      tree.root = await tree.insert(tree.root, v);
+      updateUI();
+      await sleep(300);
+    }
   }
   if (type === 'zigzag') {
-    [10, 20, 15].forEach(v => { addLog(`Sisipkan ${v} → memicu LR rotasi`, 'info'); tree.root = tree.insert(tree.root, v); });
+    // Sequence that forces multiple rotations and demonstrates balancing
+    const vals = [50, 30, 40, 60, 80, 70, 20, 10, 15];
+    addLog('Memulai simulasi Zigzag Kompleks (Double Rotations)...', 'info');
+    for (const v of vals) {
+      addLog(`Menyisipkan ${v}...`, 'info');
+      tree.root = await tree.insert(tree.root, v);
+      updateUI();
+      await sleep(600);
+    }
+    addLog('Simulasi Zigzag selesai. Perhatikan keseimbangan di setiap langkah!', 'highlight');
   }
+  state.isAnimating = false;
   updateUI();
 }
 
-/* ───────────── Traversal & Search (Animations) ───────────── */
+/* ───────────── Traversal & Search ───────────── */
 function setVisiting(val, isFound = false) {
   const el = document.querySelector(`.node-g[data-val="${val}"]`);
   if (el) el.classList.add(isFound ? 'found' : 'visiting');
@@ -363,7 +448,6 @@ async function doSearch() {
   while (curr) {
     setVisiting(curr.val);
     await sleep(600);
-    
     if (target === curr.val) {
       found = true;
       setVisiting(curr.val, true);
@@ -373,108 +457,38 @@ async function doSearch() {
       curr = target < curr.val ? curr.left : curr.right;
     }
   }
-
   if (!found) addLog(`Node ${target} tidak ditemukan.`, 'err');
   state.isAnimating = false;
 }
 
 async function doTraverse(type) {
   if (state.isAnimating || !tree.root) return;
-  
-  const searchInp = document.getElementById('search-input');
-  const target = parseInt(searchInp.value);
-  const isSearching = !isNaN(target);
-
   state.isAnimating = true;
   clearVisiting();
-  document.querySelectorAll('.node-g').forEach(el => el.style.opacity = '1');
-  
   let result = [];
-  let found = false;
-  addLog(`Memulai ${type.toUpperCase()}-order ${isSearching ? 'Search untuk ' + target : 'Traversal'}...`, 'info');
+  addLog(`Memulai ${type.toUpperCase()}-order Traversal...`, 'info');
 
   async function traverse(n) {
-    if (!n || found) return;
-
-    // --- PRE-ORDER: Root - Left - Right ---
-    if (type === 'pre') {
-      setVisiting(n.val);
-      result.push(n.val);
-      addLog(` → Mengunjungi node ${n.val}`, 'info');
-      if (isSearching && n.val === target) { 
-        found = true; setVisiting(n.val, true); 
-        addLog(`[HASIL] Target ${target} DITEMUKAN!`, 'highlight'); 
-        return; 
-      }
-      await sleep(500);
-    }
-
+    if (!n) return;
+    if (type === 'pre') { setVisiting(n.val); result.push(n.val); await sleep(500); }
     await traverse(n.left);
-    if (found) return;
-
-    // --- IN-ORDER: Left - Root - Right ---
-    if (type === 'in') {
-      setVisiting(n.val);
-      result.push(n.val);
-      addLog(` → Mengunjungi node ${n.val}`, 'info');
-      if (isSearching && n.val === target) { 
-        found = true; setVisiting(n.val, true); 
-        addLog(`[HASIL] Target ${target} DITEMUKAN!`, 'highlight'); 
-        return; 
-      }
-      await sleep(500);
-    }
-
+    if (type === 'in') { setVisiting(n.val); result.push(n.val); await sleep(500); }
     await traverse(n.right);
-    if (found) return;
-
-    // --- POST-ORDER: Left - Right - Root ---
-    if (type === 'post') {
-      setVisiting(n.val);
-      result.push(n.val);
-      addLog(` → Mengunjungi node ${n.val}`, 'info');
-      if (isSearching && n.val === target) { 
-        found = true; setVisiting(n.val, true); 
-        addLog(`[HASIL] Target ${target} DITEMUKAN!`, 'highlight'); 
-        return; 
-      }
-      await sleep(500);
-    }
-    
-    // Efek redup untuk node yang sudah dilewati (hanya jika target belum ketemu)
-    const el = document.querySelector(`.node-g[data-val="${n.val}"]`);
-    if(el && !found) el.style.opacity = '0.6';
+    if (type === 'post') { setVisiting(n.val); result.push(n.val); await sleep(500); }
   }
 
   await traverse(tree.root);
-
-  // Bagian Hasil Akhir (Summary)
-  const operationLabel = isSearching ? 'Search' : 'Traversal';
-  const typeLabel = type.toUpperCase();
-  
-  if (isSearching && !found) {
-    addLog(`[HASIL] ${typeLabel}-order ${operationLabel} (Gagal): ${result.join(', ')}`, 'err');
-    addLog(`Target ${target} tidak ditemukan dalam jalur traversal ini.`, 'err');
-  } else {
-    addLog(`[HASIL] ${typeLabel}-order ${operationLabel}: ${result.join(', ')}`, 'highlight');
-  }
-
-  // Selesaikan animasi: tunggu sebentar baru reset status
-  await sleep(1500);
-  document.querySelectorAll('.node-g').forEach(el => el.style.opacity = '1');
-  if (!found) clearVisiting();
+  addLog(`[HASIL] ${type.toUpperCase()}: ${result.join(' → ')}`, 'highlight');
+  await sleep(1000);
+  clearVisiting();
   state.isAnimating = false;
 }
 
-/* ───────────── Data Export/Import ───────────── */
+/* ───────────── Data & UI ───────────── */
 function doExport() {
-  if (!tree.root) return addLog('Pohon kosong, tidak ada yang diexport', 'err');
+  if (!tree.root) return addLog('Pohon kosong', 'err');
   const data = JSON.stringify(tree.toJSON());
-  navigator.clipboard.writeText(data).then(() => {
-    addLog('Data pohon berhasil disalin ke clipboard!', 'highlight');
-  }).catch(() => {
-    prompt("Copy data JSON berikut:", data);
-  });
+  navigator.clipboard.writeText(data).then(() => addLog('JSON disalin ke clipboard!', 'highlight'));
 }
 
 function doImport() {
@@ -482,17 +496,13 @@ function doImport() {
   const jsonStr = prompt("Paste data JSON AVL Tree:");
   if (!jsonStr) return;
   try {
-    const data = JSON.parse(jsonStr);
-    tree.root = tree.fromJSON(data);
-    state.totalRotations = 0; // Reset as we don't save this
-    addLog('Pohon berhasil dimuat dari JSON.', 'info');
+    tree.root = tree.fromJSON(JSON.parse(jsonStr));
+    state.totalRotations = 0;
     updateUI();
-  } catch (e) {
-    addLog('Gagal memuat JSON. Format tidak valid.', 'err');
-  }
+    addLog('Pohon berhasil diimpor.', 'info');
+  } catch (e) { addLog('Format JSON tidak valid.', 'err'); }
 }
 
-/* ───────────── Log & Stats ───────────── */
 function addLog(msg, cls = '') {
   const body = document.getElementById('log-body');
   const d = document.createElement('div');
@@ -512,21 +522,17 @@ function updateUI() {
   document.getElementById('stat-r').textContent = state.totalRotations;
 }
 
-/* ───────────── Zoom ───────────── */
 function zoom(delta) {
   state.scale = Math.min(Math.max(state.scale + delta, 0.4), 2.5);
-  const svg = document.getElementById('tree-svg');
-  svg.style.transform = `scale(${state.scale})`;
-  svg.style.transformOrigin = 'top center';
+  document.getElementById('tree-svg').style.transform = `scale(${state.scale})`;
 }
 function resetZoom() {
   state.scale = 1;
   document.getElementById('tree-svg').style.transform = '';
 }
 
-/* ───────────── Init & Listeners ───────────── */
 document.getElementById('val-input').addEventListener('keydown', e => { if (e.key === 'Enter') doInsert(); });
 document.getElementById('search-input').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
 
 updateUI();
-addLog('Selamat datang! Sisipkan angka untuk memulai.', 'info');
+addLog('Sistem siap. Silakan sisipkan node.', 'info');
