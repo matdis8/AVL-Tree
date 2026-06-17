@@ -230,13 +230,17 @@ header span {
 }
 
 /* Traversal & Search Highlights */
+/* Traversal & Search Highlights - Berbeda dari warna BF */
 .node-g.visiting .node-circle { 
-  fill: var(--accent) !important; 
-  filter: drop-shadow(0 0 10px var(--accent)); 
+  fill: #ffb300 !important; /* Amber/Oranye Terang agar beda dari Biru/Hijau */
+  filter: drop-shadow(0 0 15px #ffb300); 
+  stroke: #fff;
+  stroke-width: 2px;
 }
 .node-g.found .node-circle { 
-  fill: var(--green) !important; 
-  filter: drop-shadow(0 0 12px var(--green)); 
+  fill: var(--accent2) !important; /* Ungu/Magenta agar sangat mencolok */
+  filter: drop-shadow(0 0 20px var(--accent2));
+  r: 25px; /* Sedikit membesar saat ketemu */
 }
 .node-g.unbalanced-node .node-circle {
   fill: var(--red) !important;

@@ -463,24 +463,80 @@ async function doSearch() {
 
 async function doTraverse(type) {
   if (state.isAnimating || !tree.root) return;
+  
+  const searchInp = document.getElementById('search-input');
+  const target = parseInt(searchInp.value);
+  const isSearching = !isNaN(target);
+
   state.isAnimating = true;
   clearVisiting();
+  document.querySelectorAll('.node-g').forEach(el => el.style.opacity = '1');
+  
   let result = [];
-  addLog(`Memulai ${type.toUpperCase()}-order Traversal...`, 'info');
+  let found = false;
+  const typeLabel = type.toUpperCase();
+  
+  addLog(`=== Memulai ${typeLabel}-order ${isSearching ? 'Search untuk ' + target : 'Traversal'} ===`, 'highlight');
 
   async function traverse(n) {
-    if (!n) return;
-    if (type === 'pre') { setVisiting(n.val); result.push(n.val); await sleep(500); }
-    await traverse(n.left);
-    if (type === 'in') { setVisiting(n.val); result.push(n.val); await sleep(500); }
-    await traverse(n.right);
-    if (type === 'post') { setVisiting(n.val); result.push(n.val); await sleep(500); }
+    if (!n || found) return;
+
+    const el = document.querySelector(`.node-g[data-val="${n.val}"]`);
+    
+    // Helper function untuk memproses kunjungan node
+    async function visitNode(node) {
+      if (found) return;
+      setVisiting(node.val);
+      result.push(node.val);
+      addLog(`[CHECK] Memeriksa node ${node.val}...`, 'info');
+      
+      if (isSearching && node.val === target) {
+        found = true;
+        setVisiting(node.val, true); // Mark as found
+        addLog(`[HASIL] Target ${target} DITEMUKAN dalam jalur ${typeLabel}!`, 'highlight');
+        await sleep(1000);
+        return;
+      }
+      await sleep(state.animationSpeed);
+    }
+
+    // --- PRE-ORDER: Root - Left - Right ---
+    if (type === 'pre') await visitNode(n);
+
+    if (!found) await traverse(n.left);
+
+    // --- IN-ORDER: Left - Root - Right ---
+    if (type === 'in') await visitNode(n);
+
+    if (!found) await traverse(n.right);
+
+    // --- POST-ORDER: Left - Right - Root ---
+    if (type === 'post') await visitNode(n);
+
+    // Efek redup hanya jika bukan target yang dicari
+    if (el && !found) el.style.opacity = '0.4';
   }
 
   await traverse(tree.root);
-  addLog(`[HASIL] ${type.toUpperCase()}: ${result.join(' → ')}`, 'highlight');
-  await sleep(1000);
-  clearVisiting();
+  
+  if (isSearching) {
+    if (found) {
+      // Menampilkan history jalur penelusuran jika target ditemukan
+      const pathStr = result.join(' → ');
+      addLog(`[HASIL] Target ${target} DITEMUKAN dalam jalur ${typeLabel}!`, 'highlight');
+      addLog(`Rute penelusuran: ${pathStr}`, 'info');
+    } else {
+      addLog(`[HASIL] ${target} tidak ditemukan. Jalur yang diperiksa: ${result.join(' → ')}`, 'err');
+    }
+  } else {
+    addLog(`HASIL AKHIR ${typeLabel}: ${result.join(' → ')}`, 'highlight');
+  }
+
+  await sleep(1500);
+  document.querySelectorAll('.node-g').forEach(el => {
+    if (!el.classList.contains('found')) el.style.opacity = '1';
+  });
+  if (!found) clearVisiting();
   state.isAnimating = false;
 }
 
